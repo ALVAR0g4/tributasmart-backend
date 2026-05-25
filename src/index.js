@@ -45,6 +45,14 @@ app.post('/auth/registro', async (req, res) => {
     'INSERT INTO usuarios (nombre, email, password, cedula, telefono, tipo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
     [nombre, email, hash, cedula, telefono, tipo || 'empleado']
   )
+  // Asignar al primer contador disponible automaticamente
+  const contador = await db.query('SELECT id FROM contadores LIMIT 1')
+  if (contador.rows.length > 0) {
+    await db.query(
+      'INSERT INTO relacion_contador_cliente (contador_id, usuario_id) VALUES ($1, $2)',
+      [contador.rows[0].id, result.rows[0].id]
+    )
+  }
   await db.query('INSERT INTO datos_tributarios (usuario_id) VALUES ($1)', [result.rows[0].id])
   res.json({ ok: true, mensaje: 'Usuario registrado correctamente' })
 })
