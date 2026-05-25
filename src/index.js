@@ -202,6 +202,40 @@ app.put('/usuario/:id', async (req, res) => {
   )
   res.json({ ok: true, mensaje: 'Usuario actualizado' })
 })
+// ENVIAR REPORTE AL CONTADOR
+app.post('/reporte/:userId/enviar', async (req, res) => {
+  const usuario = await db.query('SELECT * FROM usuarios WHERE id = $1', [req.params.userId])
+  if (usuario.rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' })
+  
+  // Buscar contador asignado
+  const relacion = await db.query(
+    'SELECT contador_id FROM relacion_contador_cliente WHERE usuario_id = $1',
+    [req.params.userId]
+  )
+  if (relacion.rows.length === 0) return res.status(404).json({ error: 'No tienes contador asignado' })
+
+  // Guardar notificacion
+  await db.query(
+    'INSERT INTO notificaciones (contador_id, usuario_id, mensaje, leida) VALUES ($1, $2, $3, $4)',
+    [relacion.rows[0].contador_id, req.params.userId, `${usuario.rows[0].nombre} te envio su reporte para revision`, false]
+  )
+  res.json({ ok: true, mensaje: 'Reporte enviado al contador correctamente' })
+})
+
+// NOTIFICACIONES DEL CONTADOR
+app.get('/contador/:id/notificaciones', async (req, res) => {
+  const result = await db.query(
+    'SELECT * FROM notificaciones WHERE contador_id = $1 ORDER BY created_at DESC',
+    [req.params.id]
+  )
+  res.json(result.rows)
+})
+
+// MARCAR NOTIFICACION COMO LEIDA
+app.put('/notificaciones/:id/leer', async (req, res) => {
+  await db.query('UPDATE notificaciones SET leida = true WHERE id = $1', [req.params.id])
+  res.json({ ok: true })
+})
 
 app.listen(PORT, () => {
   console.log('Servidor corriendo en http://localhost:' + PORT)
