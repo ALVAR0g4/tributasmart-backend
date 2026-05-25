@@ -65,6 +65,51 @@ app.get('/documentos/:userId', (req, res) => {
   res.json(docs)
 })
 
+// Guardar diagnostico
+app.post('/diagnostico/:userId', (req, res) => {
+  const { ingresos, patrimonio, tarjeta, compras, consignaciones, inversiones } = req.body
+  
+  // Limites DIAN 2024
+  const LIMITE_INGRESOS = 59294000
+  const LIMITE_PATRIMONIO = 190985000
+  const LIMITE_CONSUMOS = 59294000
+  const LIMITE_CONSIGNACIONES = 59294000
+
+  const debeDeclarar = 
+    ingresos > LIMITE_INGRESOS ||
+    patrimonio > LIMITE_PATRIMONIO ||
+    tarjeta > LIMITE_CONSUMOS ||
+    consignaciones > LIMITE_CONSIGNACIONES
+
+  // Actualizar ingresos en datos tributarios
+  db.prepare('UPDATE datos_tributarios SET ingresos = ? WHERE usuario_id = ?')
+    .run(ingresos, req.params.userId)
+
+  res.json({ ok: true, debeDeclarar, mensaje: debeDeclarar ? 'Debes declarar renta 2024' : 'No estas obligado a declarar renta 2024' })
+})
+// LOGIN CONTADOR
+app.post('/contador/login', (req, res) => {
+  const { email, password } = req.body
+  const contador = db.prepare('SELECT * FROM contadores WHERE email = ?').get(email)
+  if (!contador) return res.status(401).json({ error: 'Email o contrasena incorrectos' })
+  const valido = bcrypt.compareSync(password, contador.password)
+  if (!valido) return res.status(401).json({ error: 'Email o contrasena incorrectos' })
+  const token = jwt.sign({ id: contador.id, email: contador.email, rol: 'contador' }, SECRET, { expiresIn: '7d' })
+  res.json({ ok: true, token, contador: { id: contador.id, nombre: contador.nombre, email: contador.email, matricula: contador.matricula, rol: 'contador' } })
+})
+
+// CLIENTES DEL CONTADOR
+app.get('/contador/:id/clientes', (req, res) => {
+  const clientes = db.prepare(`
+    SELECT u.id, u.nombre, u.email, u.cedula, u.telefono, dt.ingresos, dt.deducciones, dt.retenciones, dt.impuesto_estimado
+    FROM relacion_contador_cliente rc
+    JOIN usuarios u ON u.id = rc.usuario_id
+    LEFT JOIN datos_tributarios dt ON dt.usuario_id = u.id
+    WHERE rc.contador_id = ?
+  `).all(req.params.id)
+  res.json(clientes)
+})
+
 app.listen(PORT, () => {
   console.log('Servidor corriendo en http://localhost:' + PORT)
 })
