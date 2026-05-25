@@ -193,6 +193,15 @@ app.get('/reporte/:userId/pdf', async (req, res) => {
   doc.text(`Generado el ${new Date().toLocaleDateString('es-CO')}`, { align: 'center' })
   doc.end()
 })
+// ACTUALIZAR USUARIO
+app.put('/usuario/:id', async (req, res) => {
+  const { nombre, cedula, telefono, email } = req.body
+  await db.query(
+    'UPDATE usuarios SET nombre = $1, cedula = $2, telefono = $3, email = $4 WHERE id = $5',
+    [nombre, cedula, telefono, email, req.params.id]
+  )
+  res.json({ ok: true, mensaje: 'Usuario actualizado' })
+})
 
 app.listen(PORT, () => {
   console.log('Servidor corriendo en http://localhost:' + PORT)
