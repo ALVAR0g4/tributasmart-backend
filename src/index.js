@@ -256,6 +256,11 @@ app.put('/notificaciones/:id/leer', async (req, res) => {
   await db.query('UPDATE notificaciones SET leida = true WHERE id = $1', [req.params.id])
   res.json({ ok: true })
 })
+// LISTAR CONTADORES DISPONIBLES
+app.get('/contadores', async (req, res) => {
+  const result = await db.query('SELECT id, nombre, email, matricula FROM contadores')
+  res.json(result.rows)
+})
 
 app.listen(PORT, () => {
   console.log('Servidor corriendo en http://localhost:' + PORT)
