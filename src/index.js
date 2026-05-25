@@ -3,6 +3,32 @@ import cors from 'cors'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import db from './database.js'
+import multer from 'multer'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../uploads'))
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9)
+    cb(null, unique + path.extname(file.originalname))
+  }
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const tipos = ['application/pdf', 'image/jpeg', 'image/png']
+    if (tipos.includes(file.mimetype)) cb(null, true)
+    else cb(new Error('Solo se permiten PDF, JPG y PNG'))
+  }
+})
 
 const app = express()
 const PORT = 3000
@@ -108,6 +134,91 @@ app.get('/contador/:id/clientes', (req, res) => {
     WHERE rc.contador_id = ?
   `).all(req.params.id)
   res.json(clientes)
+})
+// GENERAR PDF
+import PDFDocument from 'pdfkit'
+
+app.get('/reporte/:userId/pdf', (req, res) => {
+  const usuario = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(req.params.userId)
+  const datos = db.prepare('SELECT * FROM datos_tributarios WHERE usuario_id = ?').get(req.params.userId)
+
+  if (!usuario || !datos) return res.status(404).json({ error: 'No encontrado' })
+
+  const doc = new PDFDocument({ margin: 50 })
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename=reporte_tributario_${usuario.nombre}.pdf`)
+
+  doc.pipe(res)
+
+  // Encabezado
+  doc.fontSize(20).fillColor('#185FA5').text('TributaSmart', { align: 'center' })
+  doc.fontSize(12).fillColor('#6b7280').text('Resumen Tributario - Año gravable 2024', { align: 'center' })
+  doc.moveDown()
+  doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#e5e7eb').stroke()
+  doc.moveDown()
+
+  // Datos del contribuyente
+  doc.fontSize(13).fillColor('#111').text('Datos del contribuyente')
+  doc.moveDown(0.5)
+  doc.fontSize(11).fillColor('#374151')
+  doc.text(`Nombre: ${usuario.nombre}`)
+  doc.text(`Cedula: ${usuario.cedula}`)
+  doc.text(`Email: ${usuario.email}`)
+  doc.text(`Tipo: ${usuario.tipo || 'Empleado'}`)
+  doc.moveDown()
+
+  // Resumen tributario
+  doc.fontSize(13).fillColor('#111').text('Resumen tributario')
+  doc.moveDown(0.5)
+  doc.fontSize(11).fillColor('#374151')
+  doc.text(`Ingresos brutos:        $${Math.round(datos.ingresos).toLocaleString()}`)
+  doc.text(`Deducciones:            $${Math.round(datos.deducciones).toLocaleString()}`)
+  doc.text(`Retenciones a favor:    $${Math.round(datos.retenciones).toLocaleString()}`)
+  doc.moveDown()
+
+  // Calculo
+  const rentaExenta = datos.ingresos * 0.25
+  const rentaLiquida = datos.ingresos - rentaExenta - datos.deducciones
+  const impuestoTabla = Math.max(0, rentaLiquida * 0.19)
+  const impuestoNeto = Math.max(0, impuestoTabla - datos.retenciones)
+
+  doc.fontSize(13).fillColor('#111').text('Calculo del impuesto')
+  doc.moveDown(0.5)
+  doc.fontSize(11).fillColor('#374151')
+  doc.text(`Renta exenta (25%):     $${Math.round(rentaExenta).toLocaleString()}`)
+  doc.text(`Renta liquida:          $${Math.round(rentaLiquida).toLocaleString()}`)
+  doc.text(`Impuesto segun tabla:   $${Math.round(impuestoTabla).toLocaleString()}`)
+  doc.moveDown()
+
+  doc.fontSize(13).fillColor('#185FA5').text(`Impuesto neto estimado: $${Math.round(impuestoNeto).toLocaleString()}`)
+  doc.moveDown()
+
+  // Pie
+  doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#e5e7eb').stroke()
+  doc.moveDown()
+  doc.fontSize(9).fillColor('#9ca3af').text('Este reporte fue generado por TributaSmart. No reemplaza el concepto de un contador certificado.', { align: 'center' })
+  doc.text(`Generado el ${new Date().toLocaleDateString('es-CO')}`, { align: 'center' })
+
+  doc.end()
+})
+// Servir archivos subidos
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+
+// SUBIR DOCUMENTO
+app.post('/documentos/:userId/subir', upload.single('archivo'), (req, res) => {
+  const { nombre, tipo } = req.body
+  const archivo = req.file
+  if (!archivo) return res.status(400).json({ error: 'No se recibio archivo' })
+  db.prepare('INSERT INTO documentos (usuario_id, nombre, tipo, estado) VALUES (?, ?, ?, ?)')
+    .run(req.params.userId, nombre || archivo.originalname, tipo || 'otro', 'cargado')
+  res.json({ ok: true, mensaje: 'Documento subido correctamente', archivo: archivo.filename })
+})
+
+// LISTAR DOCUMENTOS
+app.get('/documentos/:userId', (req, res) => {
+  const docs = db.prepare('SELECT * FROM documentos WHERE usuario_id = ?').all(req.params.userId)
+  res.json(docs)
 })
 
 app.listen(PORT, () => {
