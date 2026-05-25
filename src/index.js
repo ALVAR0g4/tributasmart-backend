@@ -80,6 +80,18 @@ app.post('/contador/login', async (req, res) => {
   const token = jwt.sign({ id: contador.id, email: contador.email, rol: 'contador' }, SECRET, { expiresIn: '7d' })
   res.json({ ok: true, token, contador: { id: contador.id, nombre: contador.nombre, email: contador.email, matricula: contador.matricula, rol: 'contador' } })
 })
+// REGISTRO CONTADOR
+app.post('/contador/registro', async (req, res) => {
+  const { nombre, email, password, matricula } = req.body
+  const existe = await db.query('SELECT * FROM contadores WHERE email = $1', [email])
+  if (existe.rows.length > 0) return res.status(400).json({ error: 'El email ya esta registrado' })
+  const hash = bcrypt.hashSync(password, 10)
+  await db.query(
+    'INSERT INTO contadores (nombre, email, password, matricula) VALUES ($1, $2, $3, $4)',
+    [nombre, email, hash, matricula]
+  )
+  res.json({ ok: true, mensaje: 'Contador registrado correctamente' })
+})
 
 // DATOS TRIBUTARIOS
 app.get('/tributario/:userId', async (req, res) => {
