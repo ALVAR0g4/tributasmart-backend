@@ -37,7 +37,7 @@ app.get('/', (req, res) => {
 
 // REGISTRO
 app.post('/auth/registro', async (req, res) => {
-  const { nombre, email, password, cedula, telefono, tipo } = req.body
+  const { nombre, email, password, cedula, telefono, tipo, contador_id } = req.body
   const existe = await db.query('SELECT * FROM usuarios WHERE email = $1', [email])
   if (existe.rows.length > 0) return res.status(400).json({ error: 'El email ya esta registrado' })
   const hash = bcrypt.hashSync(password, 10)
@@ -45,15 +45,17 @@ app.post('/auth/registro', async (req, res) => {
     'INSERT INTO usuarios (nombre, email, password, cedula, telefono, tipo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
     [nombre, email, hash, cedula, telefono, tipo || 'empleado']
   )
-  // Asignar al primer contador disponible automaticamente
-  const contador = await db.query('SELECT id FROM contadores LIMIT 1')
-  if (contador.rows.length > 0) {
+  const userId = result.rows[0].id
+
+  // Asignar contador seleccionado o el primero disponible
+  const contId = contador_id || (await db.query('SELECT id FROM contadores LIMIT 1')).rows[0]?.id
+  if (contId) {
     await db.query(
       'INSERT INTO relacion_contador_cliente (contador_id, usuario_id) VALUES ($1, $2)',
-      [contador.rows[0].id, result.rows[0].id]
+      [contId, userId]
     )
   }
-  await db.query('INSERT INTO datos_tributarios (usuario_id) VALUES ($1)', [result.rows[0].id])
+  await db.query('INSERT INTO datos_tributarios (usuario_id) VALUES ($1)', [userId])
   res.json({ ok: true, mensaje: 'Usuario registrado correctamente' })
 })
 
