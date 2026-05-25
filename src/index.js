@@ -17,12 +17,12 @@ app.get('/', (req, res) => {
 
 // REGISTRO
 app.post('/auth/registro', (req, res) => {
-  const { nombre, email, password, cedula, telefono } = req.body
+  const { nombre, email, password, cedula, telefono, tipo } = req.body
   const existe = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(email)
-  if (existe) return res.status(400).json({ error: 'El email ya está registrado' })
+  if (existe) return res.status(400).json({ error: 'El email ya esta registrado' })
   const hash = bcrypt.hashSync(password, 10)
-  const result = db.prepare('INSERT INTO usuarios (nombre, email, password, cedula, telefono) VALUES (?, ?, ?, ?, ?)')
-    .run(nombre, email, hash, cedula, telefono)
+  const result = db.prepare('INSERT INTO usuarios (nombre, email, password, cedula, telefono, tipo) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(nombre, email, hash, cedula, telefono, tipo || 'empleado')
   db.prepare('INSERT INTO datos_tributarios (usuario_id) VALUES (?)').run(result.lastInsertRowid)
   res.json({ ok: true, mensaje: 'Usuario registrado correctamente' })
 })
@@ -35,7 +35,7 @@ app.post('/auth/login', (req, res) => {
   const valido = bcrypt.compareSync(password, usuario.password)
   if (!valido) return res.status(401).json({ error: 'Email o contrasena incorrectos' })
   const token = jwt.sign({ id: usuario.id, email: usuario.email }, SECRET, { expiresIn: '7d' })
-  res.json({ ok: true, token, usuario: { id: usuario.id, nombre: usuario.nombre, email: usuario.email } })
+  res.json({ ok: true, token, usuario: { id: usuario.id, nombre: usuario.nombre, email: usuario.email, tipo: usuario.tipo } })
 })
 
 // DATOS TRIBUTARIOS
