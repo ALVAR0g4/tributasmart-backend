@@ -285,6 +285,18 @@ app.post('/notas/guardar', async (req, res) => {
   )
   res.json({ ok: true, mensaje: 'Nota guardada' })
 })
+// CAMBIAR CONTRASENA
+app.put('/usuario/:id/password', async (req, res) => {
+  const { password_actual, password_nuevo } = req.body
+  const result = await db.query('SELECT * FROM usuarios WHERE id = $1', [req.params.id])
+  const usuario = result.rows[0]
+  if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' })
+  const valido = bcrypt.compareSync(password_actual, usuario.password)
+  if (!valido) return res.status(401).json({ error: 'La contrasena actual es incorrecta' })
+  const hash = bcrypt.hashSync(password_nuevo, 10)
+  await db.query('UPDATE usuarios SET password = $1 WHERE id = $2', [hash, req.params.id])
+  res.json({ ok: true, mensaje: 'Contrasena actualizada correctamente' })
+})
 
 app.listen(PORT, () => {
   console.log('Servidor corriendo en http://localhost:' + PORT)
