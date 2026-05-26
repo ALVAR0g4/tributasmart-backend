@@ -68,7 +68,14 @@ app.post('/auth/login', async (req, res) => {
   const valido = bcrypt.compareSync(password, usuario.password)
   if (!valido) return res.status(401).json({ error: 'Email o contrasena incorrectos' })
   const token = jwt.sign({ id: usuario.id, email: usuario.email }, SECRET, { expiresIn: '7d' })
-  res.json({ ok: true, token, usuario: { id: usuario.id, nombre: usuario.nombre, email: usuario.email, tipo: usuario.tipo } })
+  res.json({ ok: true, token, usuario: { 
+    id: usuario.id, 
+    nombre: usuario.nombre, 
+    email: usuario.email, 
+    tipo: usuario.tipo,
+    cedula: usuario.cedula,
+    telefono: usuario.telefono
+  }})
 })
 
 // LOGIN CONTADOR
