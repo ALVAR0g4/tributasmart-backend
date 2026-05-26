@@ -273,6 +273,18 @@ app.put('/tributario/:userId/estado', async (req, res) => {
   )
   res.json({ ok: true, mensaje: 'Estado actualizado' })
 })
+// GUARDAR NOTA DEL CONTADOR
+app.post('/notas/guardar', async (req, res) => {
+  const { contador_id, usuario_id, nota } = req.body
+  await db.query(
+    `INSERT INTO notas_contador (contador_id, usuario_id, nota) 
+     VALUES ($1, $2, $3) 
+     ON CONFLICT (contador_id, usuario_id) 
+     DO UPDATE SET nota = $3, updated_at = CURRENT_TIMESTAMP`,
+    [contador_id, usuario_id, nota]
+  )
+  res.json({ ok: true, mensaje: 'Nota guardada' })
+})
 
 app.listen(PORT, () => {
   console.log('Servidor corriendo en http://localhost:' + PORT)
