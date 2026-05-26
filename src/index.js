@@ -13,7 +13,7 @@ dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3000
-const SECRET = process.env.JWT_SECRET || 'tributasmart2024'
+const SECRET = process.env.JWT_SECRET || 'tributasmart2025'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -242,7 +242,7 @@ app.get('/reporte/:userId/pdf', async (req, res) => {
   doc.pipe(res)
 
   doc.fontSize(20).fillColor('#185FA5').text('TributaSmart', { align: 'center' })
-  doc.fontSize(12).fillColor('#6b7280').text('Resumen Tributario - Año gravable 2024', { align: 'center' })
+  doc.fontSize(12).fillColor('#6b7280').text('Resumen Tributario - Año gravable 2025', { align: 'center' })
   doc.moveDown()
   doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#e5e7eb').stroke()
   doc.moveDown()
