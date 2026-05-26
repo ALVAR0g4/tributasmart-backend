@@ -66,7 +66,7 @@ const init = async () => {
       leida BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-    
+    ALTER TABLE datos_tributarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'pendiente';
   `)
 
   // Usuario de prueba
