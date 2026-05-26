@@ -216,6 +216,19 @@ app.get('/reporte/:userId/pdf', async (req, res) => {
   doc.text(`Generado el ${new Date().toLocaleDateString('es-CO')}`, { align: 'center' })
   doc.end()
 })
+// CAMBIAR CONTRASENA
+app.put('/usuario/:id/password', async (req, res) => {
+  const { password_actual, password_nuevo } = req.body
+  const result = await db.query('SELECT * FROM usuarios WHERE id = $1', [req.params.id])
+  const usuario = result.rows[0]
+  if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' })
+  const valido = bcrypt.compareSync(password_actual, usuario.password)
+  if (!valido) return res.status(401).json({ error: 'La contrasena actual es incorrecta' })
+  const hash = bcrypt.hashSync(password_nuevo, 10)
+  await db.query('UPDATE usuarios SET password = $1 WHERE id = $2', [hash, req.params.id])
+  res.json({ ok: true, mensaje: 'Contrasena actualizada correctamente' })
+})
+
 // ACTUALIZAR USUARIO
 app.put('/usuario/:id', async (req, res) => {
   const { nombre, cedula, telefono, email } = req.body
@@ -225,6 +238,7 @@ app.put('/usuario/:id', async (req, res) => {
   )
   res.json({ ok: true, mensaje: 'Usuario actualizado' })
 })
+
 // ENVIAR REPORTE AL CONTADOR
 app.post('/reporte/:userId/enviar', async (req, res) => {
   const usuario = await db.query('SELECT * FROM usuarios WHERE id = $1', [req.params.userId])
