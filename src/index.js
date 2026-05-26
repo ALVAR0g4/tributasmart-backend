@@ -120,19 +120,76 @@ app.put('/tributario/:userId', async (req, res) => {
 
 // DIAGNOSTICO
 app.post('/diagnostico/:userId', async (req, res) => {
-  const { ingresos, patrimonio, tarjeta, consignaciones } = req.body
+  const { ingresos, patrimonio, tarjeta, compras, consignaciones, inversiones } = req.body
+  
+  const usuarioRes = await db.query('SELECT tipo FROM usuarios WHERE id = $1', [req.params.userId])
+  const tipo = usuarioRes.rows[0]?.tipo || 'empleado'
+
+  // Limites DIAN 2026
   const LIMITE_INGRESOS = 59294000
   const LIMITE_PATRIMONIO = 190985000
   const LIMITE_CONSUMOS = 59294000
   const LIMITE_CONSIGNACIONES = 59294000
-  const debeDeclarar =
-    ingresos > LIMITE_INGRESOS ||
-    patrimonio > LIMITE_PATRIMONIO ||
-    tarjeta > LIMITE_CONSUMOS ||
-    consignaciones > LIMITE_CONSIGNACIONES
+
+  let debeDeclarar = false
+  let razones = []
+  let recomendaciones = []
+
+  if (ingresos > LIMITE_INGRESOS) {
+    debeDeclarar = true
+    razones.push('Tus ingresos superan el limite permitido')
+  }
+  if (patrimonio > LIMITE_PATRIMONIO) {
+    debeDeclarar = true
+    razones.push('Tu patrimonio supera el limite permitido')
+  }
+  if (tarjeta > LIMITE_CONSUMOS) {
+    debeDeclarar = true
+    razones.push('Tus consumos con tarjeta superan el limite')
+  }
+  if (consignaciones > LIMITE_CONSIGNACIONES) {
+    debeDeclarar = true
+    razones.push('Tus consignaciones bancarias superan el limite')
+  }
+
+  // Recomendaciones por tipo
+  if (tipo === 'empleado') {
+    recomendaciones.push('Solicita tu certificado de ingresos y retenciones al empleador')
+    recomendaciones.push('Verifica las retenciones en la fuente que te practicaron')
+    if (debeDeclarar) recomendaciones.push('Puedes deducir intereses de vivienda y medicina prepagada')
+  } else if (tipo === 'independiente') {
+    debeDeclarar = true
+    razones.push('Como independiente debes declarar si tus ingresos superan 3.5 SMMLV')
+    recomendaciones.push('Registra todos tus gastos relacionados con tu actividad')
+    recomendaciones.push('Guarda tus facturas de compras y gastos del año')
+    recomendaciones.push('Puedes deducir el 50% de tu GMF pagado')
+  } else if (tipo === 'emprendedor') {
+    debeDeclarar = true
+    razones.push('Como emprendedor debes declarar si tienes ingresos por tu actividad')
+    recomendaciones.push('Registra los gastos de tu negocio como deducciones')
+    recomendaciones.push('Si tienes empleados verifica las retenciones')
+    recomendaciones.push('Considera hablar con tu contador sobre el regimen simple')
+  } else if (tipo === 'pensionado') {
+    recomendaciones.push('Las pensiones tienen exencion del 25% hasta cierto limite')
+    recomendaciones.push('Verifica si tu pension supera 1000 UVT para determinar obligacion')
+    if (ingresos > 38004000) {
+      debeDeclarar = true
+      razones.push('Tu pension supera el limite exento y debes declarar')
+    }
+  }
+
   await db.query('UPDATE datos_tributarios SET ingresos = $1 WHERE usuario_id = $2', [ingresos, req.params.userId])
-  res.json({ ok: true, debeDeclarar, mensaje: debeDeclarar ? 'Debes declarar renta 2024' : 'No estas obligado a declarar renta 2024' })
+
+  res.json({ 
+    ok: true, 
+    debeDeclarar, 
+    tipo,
+    razones,
+    recomendaciones,
+    mensaje: debeDeclarar ? 'Debes declarar renta 2026' : 'No estas obligado a declarar renta 2026'
+  })
 })
+
 
 // USUARIO
 app.get('/usuario/:id', async (req, res) => {
