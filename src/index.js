@@ -154,7 +154,8 @@ app.post('/documentos/:userId/subir', upload.single('archivo'), async (req, res)
 // CLIENTES DEL CONTADOR
 app.get('/contador/:id/clientes', async (req, res) => {
   const result = await db.query(`
-    SELECT u.id, u.nombre, u.email, u.cedula, u.telefono, dt.ingresos, dt.deducciones, dt.retenciones, dt.impuesto_estimado
+    SELECT u.id, u.nombre, u.email, u.cedula, u.telefono, 
+           dt.ingresos, dt.deducciones, dt.retenciones, dt.impuesto_estimado, dt.estado
     FROM relacion_contador_cliente rc
     JOIN usuarios u ON u.id = rc.usuario_id
     LEFT JOIN datos_tributarios dt ON dt.usuario_id = u.id
@@ -262,6 +263,15 @@ app.put('/notificaciones/:id/leer', async (req, res) => {
 app.get('/contadores', async (req, res) => {
   const result = await db.query('SELECT id, nombre, email, matricula FROM contadores')
   res.json(result.rows)
+})
+// ACTUALIZAR ESTADO REPORTE
+app.put('/tributario/:userId/estado', async (req, res) => {
+  const { estado } = req.body
+  await db.query(
+    'UPDATE datos_tributarios SET estado = $1 WHERE usuario_id = $2',
+    [estado, req.params.userId]
+  )
+  res.json({ ok: true, mensaje: 'Estado actualizado' })
 })
 
 app.listen(PORT, () => {
