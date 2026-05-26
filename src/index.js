@@ -344,13 +344,43 @@ app.get('/contadores', async (req, res) => {
 })
 // ACTUALIZAR ESTADO REPORTE
 app.put('/tributario/:userId/estado', async (req, res) => {
-  const { estado } = req.body
+  const { estado, contador_id } = req.body
   await db.query(
     'UPDATE datos_tributarios SET estado = $1 WHERE usuario_id = $2',
     [estado, req.params.userId]
   )
+
+  // Notificar al cliente
+  const mensajes = {
+    pendiente:    'Tu contador marco tu reporte como Pendiente',
+    en_revision:  'Tu contador esta revisando tu reporte',
+    aprobado:     'Tu contador aprobo tu reporte. Ya puedes declarar!',
+    correcciones: 'Tu contador solicita correcciones en tu reporte'
+  }
+
+  await db.query(
+    'INSERT INTO notificaciones_cliente (usuario_id, contador_id, mensaje, leida) VALUES ($1, $2, $3, $4)',
+    [req.params.userId, contador_id, mensajes[estado], false]
+  )
+
   res.json({ ok: true, mensaje: 'Estado actualizado' })
 })
+
+// NOTIFICACIONES DEL CLIENTE
+app.get('/usuario/:id/notificaciones', async (req, res) => {
+  const result = await db.query(
+    'SELECT * FROM notificaciones_cliente WHERE usuario_id = $1 ORDER BY created_at DESC',
+    [req.params.id]
+  )
+  res.json(result.rows)
+})
+
+// MARCAR NOTIFICACION CLIENTE COMO LEIDA
+app.put('/usuario/:id/notificaciones/leer', async (req, res) => {
+  await db.query('UPDATE notificaciones_cliente SET leida = true WHERE usuario_id = $1', [req.params.id])
+  res.json({ ok: true })
+})
+
 // GUARDAR NOTA DEL CONTADOR
 app.post('/notas/guardar', async (req, res) => {
   const { contador_id, usuario_id, nota } = req.body

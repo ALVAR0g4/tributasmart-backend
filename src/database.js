@@ -75,6 +75,14 @@ const init = async () => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(contador_id, usuario_id)
     );
+    CREATE TABLE IF NOT EXISTS notificaciones_cliente (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+      contador_id INTEGER NOT NULL REFERENCES contadores(id),
+      mensaje TEXT NOT NULL,
+      leida BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
   // Usuario de prueba
