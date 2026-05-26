@@ -67,6 +67,14 @@ const init = async () => {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     ALTER TABLE datos_tributarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'pendiente';
+    CREATE TABLE IF NOT EXISTS notas_contador (
+      id SERIAL PRIMARY KEY,
+      contador_id INTEGER NOT NULL REFERENCES contadores(id),
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+      nota TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(contador_id, usuario_id)
+    );
   `)
 
   // Usuario de prueba
