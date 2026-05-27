@@ -405,6 +405,58 @@ app.put('/usuario/:id/password', async (req, res) => {
   await db.query('UPDATE usuarios SET password = $1 WHERE id = $2', [hash, req.params.id])
   res.json({ ok: true, mensaje: 'Contrasena actualizada correctamente' })
 })
+// CALCULO REAL TABLA DIAN 2025
+app.post('/calcular/:userId', async (req, res) => {
+  const result = await db.query('SELECT * FROM datos_tributarios WHERE usuario_id = $1', [req.params.userId])
+  const datos = result.rows[0]
+  if (!datos) return res.status(404).json({ error: 'No encontrado' })
+
+  const UVT = 49799
+
+  // Renta liquida gravable
+  const rentaExenta = datos.ingresos * 0.25
+  const rentaLiquida = Math.max(0, datos.ingresos - rentaExenta - datos.deducciones)
+  const rentaEnUVT = rentaLiquida / UVT
+
+  // Tabla DIAN 2025
+  let impuesto = 0
+  if (rentaEnUVT <= 1090) {
+    impuesto = 0
+  } else if (rentaEnUVT <= 1700) {
+    impuesto = (rentaEnUVT - 1090) * 0.19 * UVT
+  } else if (rentaEnUVT <= 4100) {
+    impuesto = (610 * 0.19 + (rentaEnUVT - 1700) * 0.28) * UVT
+  } else if (rentaEnUVT <= 8670) {
+    impuesto = (610 * 0.19 + 2400 * 0.28 + (rentaEnUVT - 4100) * 0.33) * UVT
+  } else if (rentaEnUVT <= 18970) {
+    impuesto = (610 * 0.19 + 2400 * 0.28 + 4570 * 0.33 + (rentaEnUVT - 8670) * 0.35) * UVT
+  } else if (rentaEnUVT <= 31000) {
+    impuesto = (610 * 0.19 + 2400 * 0.28 + 4570 * 0.33 + 10300 * 0.35 + (rentaEnUVT - 18970) * 0.37) * UVT
+  } else {
+    impuesto = (610 * 0.19 + 2400 * 0.28 + 4570 * 0.33 + 10300 * 0.35 + 12030 * 0.37 + (rentaEnUVT - 31000) * 0.39) * UVT
+  }
+
+  const impuestoNeto = Math.max(0, impuesto - datos.retenciones)
+
+  // Actualizar impuesto estimado
+  await db.query(
+    'UPDATE datos_tributarios SET impuesto_estimado = $1 WHERE usuario_id = $2',
+    [Math.round(impuestoNeto), req.params.userId]
+  )
+
+  res.json({
+    ok: true,
+    uvt: UVT,
+    ingresos: datos.ingresos,
+    renta_exenta: Math.round(rentaExenta),
+    deducciones: datos.deducciones,
+    renta_liquida: Math.round(rentaLiquida),
+    renta_en_uvt: Math.round(rentaEnUVT),
+    impuesto_tabla: Math.round(impuesto),
+    retenciones: datos.retenciones,
+    impuesto_neto: Math.round(impuestoNeto)
+  })
+})
 
 app.listen(PORT, () => {
   console.log('Servidor corriendo en http://localhost:' + PORT)
