@@ -515,6 +515,38 @@ app.post('/calcular/:userId', async (req, res) => {
     impuesto_neto: Math.round(impuestoNeto)
   })
 })
+// CONTADOR AGREGA CLIENTE POR EMAIL O CEDULA
+app.post('/contador/:id/agregar-cliente', async (req, res) => {
+  const { busqueda } = req.body
+  
+  // Buscar usuario por email o cedula
+  const result = await db.query(
+    'SELECT id, nombre, email, cedula, tipo FROM usuarios WHERE email = $1 OR cedula = $1',
+    [busqueda]
+  )
+  
+  if (result.rows.length === 0) 
+    return res.status(404).json({ error: 'No se encontro ningun usuario con ese email o cedula' })
+  
+  const usuario = result.rows[0]
+  
+  // Verificar si ya esta asignado
+  const existe = await db.query(
+    'SELECT * FROM relacion_contador_cliente WHERE contador_id = $1 AND usuario_id = $2',
+    [req.params.id, usuario.id]
+  )
+  
+  if (existe.rows.length > 0)
+    return res.status(400).json({ error: 'Este cliente ya esta asignado a tu cuenta' })
+  
+  // Asignar cliente al contador
+  await db.query(
+    'INSERT INTO relacion_contador_cliente (contador_id, usuario_id) VALUES ($1, $2)',
+    [req.params.id, usuario.id]
+  )
+  
+  res.json({ ok: true, mensaje: `Cliente ${usuario.nombre} agregado correctamente`, usuario })
+})
 
 app.listen(PORT, () => {
   console.log('Servidor corriendo en http://localhost:' + PORT)
