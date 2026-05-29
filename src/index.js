@@ -228,7 +228,7 @@ app.get('/contador/:id/clientes', async (req, res) => {
   res.json(result.rows)
 })
 
-// PDF
+// PDF MEJORADO
 app.get('/reporte/:userId/pdf', async (req, res) => {
   const usuarioRes = await db.query('SELECT * FROM usuarios WHERE id = $1', [req.params.userId])
   const datosRes = await db.query('SELECT * FROM datos_tributarios WHERE usuario_id = $1', [req.params.userId])
@@ -236,48 +236,106 @@ app.get('/reporte/:userId/pdf', async (req, res) => {
   const datos = datosRes.rows[0]
   if (!usuario || !datos) return res.status(404).json({ error: 'No encontrado' })
 
-  const doc = new PDFDocument({ margin: 50 })
+  const UVT = 49799
+  const rentaExenta = datos.ingresos * 0.25
+  const rentaLiquida = Math.max(0, datos.ingresos - rentaExenta - datos.deducciones)
+  const rentaEnUVT = rentaLiquida / UVT
+
+  let impuesto = 0
+  if (rentaEnUVT <= 1090) impuesto = 0
+  else if (rentaEnUVT <= 1700) impuesto = (rentaEnUVT - 1090) * 0.19 * UVT
+  else if (rentaEnUVT <= 4100) impuesto = (610 * 0.19 + (rentaEnUVT - 1700) * 0.28) * UVT
+  else if (rentaEnUVT <= 8670) impuesto = (610 * 0.19 + 2400 * 0.28 + (rentaEnUVT - 4100) * 0.33) * UVT
+  else if (rentaEnUVT <= 18970) impuesto = (610 * 0.19 + 2400 * 0.28 + 4570 * 0.33 + (rentaEnUVT - 8670) * 0.35) * UVT
+  else if (rentaEnUVT <= 31000) impuesto = (610 * 0.19 + 2400 * 0.28 + 4570 * 0.33 + 10300 * 0.35 + (rentaEnUVT - 18970) * 0.37) * UVT
+  else impuesto = (610 * 0.19 + 2400 * 0.28 + 4570 * 0.33 + 10300 * 0.35 + 12030 * 0.37 + (rentaEnUVT - 31000) * 0.39) * UVT
+
+  const impuestoNeto = Math.max(0, impuesto - datos.retenciones)
+  const fmt = (n) => '$' + Math.round(n).toLocaleString('es-CO')
+
+  const doc = new PDFDocument({ margin: 50, size: 'A4' })
   res.setHeader('Content-Type', 'application/pdf')
-  res.setHeader('Content-Disposition', `attachment; filename=reporte_${usuario.nombre}.pdf`)
+  res.setHeader('Content-Disposition', `attachment; filename=reporte_tributario_${usuario.nombre.replace(/ /g,'_')}_2025.pdf`)
   doc.pipe(res)
 
-  doc.fontSize(20).fillColor('#185FA5').text('TributaSmart', { align: 'center' })
-  doc.fontSize(12).fillColor('#6b7280').text('Resumen Tributario - Año gravable 2025', { align: 'center' })
-  doc.moveDown()
-  doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#e5e7eb').stroke()
-  doc.moveDown()
-  doc.fontSize(13).fillColor('#111').text('Datos del contribuyente')
+  // ENCABEZADO
+  doc.rect(0, 0, 612, 80).fill('#185FA5')
+  doc.fontSize(22).fillColor('#fff').text('TributaSmart', 50, 20, { align: 'left' })
+  doc.fontSize(11).fillColor('rgba(255,255,255,0.8)').text('Resumen Tributario — Año gravable 2025', 50, 48)
+  doc.fontSize(10).fillColor('rgba(255,255,255,0.7)').text(`Generado el ${new Date().toLocaleDateString('es-CO')} · Confidencial`, 50, 62)
+
+  doc.moveDown(3)
+
+  // DATOS DEL CONTRIBUYENTE
+  doc.fontSize(13).fillColor('#185FA5').text('Datos del contribuyente', 50, 100)
+  doc.moveTo(50, 116).lineTo(562, 116).strokeColor('#e5e7eb').lineWidth(0.5).stroke()
   doc.moveDown(0.5)
+
+  const tipos = { empleado: 'Empleado', independiente: 'Independiente', emprendedor: 'Emprendedor', pensionado: 'Pensionado' }
   doc.fontSize(11).fillColor('#374151')
-  doc.text(`Nombre: ${usuario.nombre}`)
-  doc.text(`Cedula: ${usuario.cedula}`)
-  doc.text(`Email: ${usuario.email}`)
-  doc.text(`Tipo: ${usuario.tipo || 'Empleado'}`)
-  doc.moveDown()
-  doc.fontSize(13).fillColor('#111').text('Resumen tributario')
-  doc.moveDown(0.5)
-  doc.fontSize(11).fillColor('#374151')
-  doc.text(`Ingresos brutos:      $${Math.round(datos.ingresos).toLocaleString()}`)
-  doc.text(`Deducciones:          $${Math.round(datos.deducciones).toLocaleString()}`)
-  doc.text(`Retenciones a favor:  $${Math.round(datos.retenciones).toLocaleString()}`)
-  doc.moveDown()
-  const rentaExenta = datos.ingresos * 0.25
-  const rentaLiquida = datos.ingresos - rentaExenta - datos.deducciones
-  const impuestoTabla = Math.max(0, rentaLiquida * 0.19)
-  const impuestoNeto = Math.max(0, impuestoTabla - datos.retenciones)
-  doc.fontSize(13).fillColor('#111').text('Calculo del impuesto')
-  doc.moveDown(0.5)
-  doc.fontSize(11).fillColor('#374151')
-  doc.text(`Renta exenta (25%):   $${Math.round(rentaExenta).toLocaleString()}`)
-  doc.text(`Renta liquida:        $${Math.round(rentaLiquida).toLocaleString()}`)
-  doc.text(`Impuesto segun tabla: $${Math.round(impuestoTabla).toLocaleString()}`)
-  doc.moveDown()
-  doc.fontSize(13).fillColor('#185FA5').text(`Impuesto neto estimado: $${Math.round(impuestoNeto).toLocaleString()}`)
-  doc.moveDown()
-  doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#e5e7eb').stroke()
-  doc.moveDown()
-  doc.fontSize(9).fillColor('#9ca3af').text('Este reporte fue generado por TributaSmart. No reemplaza el concepto de un contador certificado.', { align: 'center' })
-  doc.text(`Generado el ${new Date().toLocaleDateString('es-CO')}`, { align: 'center' })
+  doc.text(`Nombre:   ${usuario.nombre}`, 50, 125)
+  doc.text(`Cedula:   ${usuario.cedula || 'No registrada'}`, 50, 142)
+  doc.text(`Email:    ${usuario.email}`, 300, 125)
+  doc.text(`Tipo:     ${tipos[usuario.tipo] || 'Empleado'}`, 300, 142)
+  doc.text(`Telefono: ${usuario.telefono || 'No registrado'}`, 50, 159)
+
+  // RESUMEN TRIBUTARIO
+  doc.fontSize(13).fillColor('#185FA5').text('Resumen tributario', 50, 190)
+  doc.moveTo(50, 206).lineTo(562, 206).strokeColor('#e5e7eb').lineWidth(0.5).stroke()
+
+  const filas = [
+    { l: 'Ingresos brutos',        v: fmt(datos.ingresos),    color: '#111' },
+    { l: 'Rentas exentas (25%)',   v: '-' + fmt(rentaExenta), color: '#A32D2D' },
+    { l: 'Deducciones',            v: '-' + fmt(datos.deducciones), color: '#A32D2D' },
+    { l: 'Retenciones a favor',    v: '-' + fmt(datos.retenciones), color: '#27500A' },
+  ]
+
+  let y = 215
+  filas.forEach(f => {
+    doc.fontSize(11).fillColor('#6b7280').text(f.l, 50, y)
+    doc.fontSize(11).fillColor(f.color).text(f.v, 400, y, { align: 'right', width: 162 })
+    doc.moveTo(50, y + 16).lineTo(562, y + 16).strokeColor('#f3f4f6').lineWidth(0.5).stroke()
+    y += 22
+  })
+
+  // CALCULO DEL IMPUESTO
+  doc.fontSize(13).fillColor('#185FA5').text('Calculo del impuesto — Tabla DIAN 2025', 50, y + 10)
+  doc.moveTo(50, y + 26).lineTo(562, y + 26).strokeColor('#e5e7eb').lineWidth(0.5).stroke()
+  y += 35
+
+  const calculo = [
+    { l: 'Renta liquida gravable', v: fmt(rentaLiquida), color: '#0C447C' },
+    { l: 'Renta en UVT ($49.799)', v: Math.round(rentaEnUVT) + ' UVT', color: '#374151' },
+    { l: 'Impuesto segun tabla',   v: fmt(impuesto), color: '#374151' },
+    { l: 'Retenciones practicadas', v: '-' + fmt(datos.retenciones), color: '#27500A' },
+  ]
+
+  calculo.forEach(f => {
+    doc.fontSize(11).fillColor('#6b7280').text(f.l, 50, y)
+    doc.fontSize(11).fillColor(f.color).text(f.v, 400, y, { align: 'right', width: 162 })
+    doc.moveTo(50, y + 16).lineTo(562, y + 16).strokeColor('#f3f4f6').lineWidth(0.5).stroke()
+    y += 22
+  })
+
+  // IMPUESTO NETO
+  y += 5
+  doc.rect(50, y, 512, 35).fill('#185FA5')
+  doc.fontSize(13).fillColor('#fff').text('Impuesto neto estimado a pagar', 60, y + 10)
+  doc.fontSize(14).fillColor('#fff').text(fmt(impuestoNeto), 400, y + 10, { align: 'right', width: 152 })
+
+  // UVT INFO
+  y += 55
+  doc.rect(50, y, 512, 25).fill('#E6F1FB')
+  doc.fontSize(10).fillColor('#0C447C').text(`UVT 2025: $49.799 · Calculo basado en tabla oficial DIAN · Año gravable 2025`, 60, y + 7)
+
+  // PIE DE PAGINA
+  y += 50
+  doc.moveTo(50, y).lineTo(562, y).strokeColor('#e5e7eb').lineWidth(0.5).stroke()
+  y += 10
+  doc.fontSize(9).fillColor('#9ca3af')
+    .text('Este reporte fue generado por TributaSmart. No reemplaza el concepto profesional de un contador certificado.', 50, y, { align: 'center', width: 512 })
+  doc.text('La declaracion de renta debe ser revisada y firmada por un profesional contable habilitado.', 50, y + 14, { align: 'center', width: 512 })
+
   doc.end()
 })
 // CAMBIAR CONTRASENA
